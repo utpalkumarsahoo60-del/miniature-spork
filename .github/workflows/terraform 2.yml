@@ -1,0 +1,58 @@
+
+name: Terraform EC2 Deployment
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform:
+    name: Deploy EC2 using Terraform
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout GitHub repository
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Step 2: Install Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # Step 3: Authenticate with AWS using OIDC
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ap-south-1
+
+      # Step 4: Verify AWS authentication
+      - name: Verify AWS Identity
+        run: aws sts get-caller-identity
+
+      # Step 5: Initialize Terraform
+      - name: Terraform Init
+        run: terraform init
+
+      # Step 6: Validate Terraform
+      - name: Terraform Validate
+        run: terraform validate
+
+      # Step 7: Check formatting
+      - name: Terraform Format
+        run: terraform fmt -check
+
+      # Step 8: Terraform Plan
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+
+      # Step 9: Create EC2 instance
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
