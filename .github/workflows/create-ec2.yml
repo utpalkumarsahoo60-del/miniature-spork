@@ -1,0 +1,59 @@
+name: Create AWS EC2 Instance
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  create-ec2:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Verify AWS Connection
+        run: |
+          aws sts get-caller-identity
+
+      - name: Create EC2 Instance
+        id: ec2
+        run: |
+          INSTANCE_ID=$(aws ec2 run-instances \
+            --image-id "${{ vars.AMI_ID }}" \
+            --instance-type "${{ vars.INSTANCE_TYPE }}" \
+            --subnet-id "${{ vars.SUBNET_ID }}" \
+            --security-group-ids "${{ vars.SECURITY_GROUP_ID }}" \
+            --associate-public-ip-address \
+            --tag-specifications \
+            'ResourceType=instance,Tags=[{Key=Name,Value=GitHub-Actions-EC2}]' \
+            --query 'Instances[0].InstanceId' \
+            --output text)
+
+          echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
+
+          echo "Created EC2: $INSTANCE_ID"
+
+      - name: Wait for EC2 Instance
+        run: |
+          aws ec2 wait instance-running \
+            --instance-ids "$INSTANCE_ID"
+
+      - name: Get EC2 Details
+        run: |
+          aws ec2 describe-instances \
+            --instance-ids "$INSTANCE_ID" \
+            --query 'Reservations[].Instances[].[InstanceId,ImageId,PublicIpAddress,PrivateIpAddress,State.Name]' \
+            --output table
